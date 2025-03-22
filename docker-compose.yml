@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:alpine
+    container_name: postgres_ssl
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - /srv/postgres/data:/var/lib/postgresql/data
+      - /srv/postgres/certs:/etc/postgres/certs
+    command: >
+      postgres -c ssl=on
+               -c ssl_cert_file=/etc/postgres/certs/server.crt
+               -c ssl_key_file=/etc/postgres/certs/server.key
+    networks:
+      - postgres_net
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    env_file:
+      - .env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    volumes:
+      - /srv/pgadmin/data:/var/lib/pgadmin
+    networks:
+      - postgres_net
+
+  import_adstat:
+    image: python:3.12-alpine
+    container_name: import_adstat
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./crontab:/etc/crontabs/root
+    working_dir: /app
+    entrypoint: >
+      sh -c "pip install --disable-pip-version-check --root-user-action ignore -r req &&
+         crond -S -l 2 -f"
+    networks:
+      - postgres_net
+
+networks:
+  postgres_net:
+    driver: bridge
