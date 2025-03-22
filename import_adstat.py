@@ -73,7 +73,7 @@ def create_table(cursor: psycopg2.extensions.cursor, table_name: str) -> None:
         cursor.execute(
             sql.SQL("""
             CREATE TABLE IF NOT EXISTS {} (
-                id SERIAL PRIMARY KEY,
+                id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
                 date DATE,
                 unit BIGINT,
                 campaign_plat VARCHAR(1023),
