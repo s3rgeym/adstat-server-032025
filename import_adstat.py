@@ -75,12 +75,6 @@ def create_table(cursor: psycopg2.extensions.cursor, table_name: str) -> None:
             CREATE TABLE IF NOT EXISTS {} (
                 id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
                 date DATE,
-                unit BIGINT,
-                campaign_plat VARCHAR(1023),
-                ad_text TEXT,
-                target_topics TEXT[],
-                target_channels TEXT[],
-                target_langs TEXT[],
                 spent REAL,
                 impressions REAL,
                 goals REAL,
@@ -89,30 +83,13 @@ def create_table(cursor: psycopg2.extensions.cursor, table_name: str) -> None:
                 object VARCHAR(255),
                 account_uid VARCHAR(255),
                 account_name VARCHAR(255),
-                target_countries TEXT[],
-                target_user_locations TEXT[],
-                target_user_channels TEXT[],
                 ad_type VARCHAR(31),
-                ad_id INT,
                 clicks INT,
                 cpc REAL,
                 ctr REAL,
-                promote_url VARCHAR(2000),
-                website_name VARCHAR(1023),
-                views_per_users INT,
-                button_type VARCHAR(255),
-                media_type VARCHAR(255),
-                only_crypto BOOLEAN,
-                exclude_crypto BOOLEAN,
-                UNIQUE (date, unit, ad_id)
+                UNIQUE (date, object, account_uid)
             );
         """).format(sql.Identifier(table_name))
-        )
-
-        cursor.execute(
-            sql.SQL("CREATE INDEX IF NOT EXISTS idx_unit ON {} (unit);").format(
-                sql.Identifier(table_name)
-            )
         )
         cursor.execute(
             sql.SQL("CREATE INDEX IF NOT EXISTS idx_date ON {} (date);").format(
@@ -120,7 +97,7 @@ def create_table(cursor: psycopg2.extensions.cursor, table_name: str) -> None:
             )
         )
         cursor.execute(
-            sql.SQL("CREATE INDEX IF NOT EXISTS idx_ad_id ON {} (ad_id);").format(
+            sql.SQL("CREATE INDEX IF NOT EXISTS idx_object ON {} (object);").format(
                 sql.Identifier(table_name)
             )
         )
@@ -146,49 +123,24 @@ def save_data(
             batch = data[i: i + batch_size]
             cursor.executemany(
                 sql.SQL("""
-                INSERT INTO {} (
-                    date, unit, campaign_plat, ad_text, target_topics, target_channels,
-                    target_langs, spent, impressions, goals, price_target, cpm, object,
-                    account_uid, account_name, target_countries, target_user_locations,
-                    target_user_channels, ad_type, ad_id, clicks, cpc, ctr, promote_url,
-                    website_name, views_per_users, button_type, media_type, only_crypto, exclude_crypto
-                ) VALUES (
-                    %(date)s, %(unit)s, %(campaign_plat)s, %(ad_text)s, %(target_topics)s, %(target_channels)s,
-                    %(target_langs)s, %(spent)s, %(impressions)s, %(goals)s, %(price_target)s, %(cpm)s, %(object)s,
-                    %(account_uid)s, %(account_name)s, %(target_countries)s, %(target_user_locations)s,
-                    %(target_user_channels)s, %(ad_type)s, %(ad_id)s, %(clicks)s, %(cpc)s, %(ctr)s, %(promote_url)s,
-                    %(website_name)s, %(views_per_users)s, %(button_type)s, %(media_type)s, %(only_crypto)s, %(exclude_crypto)s
-                )
-                ON CONFLICT (date, unit, ad_id) DO UPDATE SET
-                    campaign_plat = EXCLUDED.campaign_plat,
-                    ad_text = EXCLUDED.ad_text,
-                    target_topics = EXCLUDED.target_topics,
-                    target_channels = EXCLUDED.target_channels,
-                    target_langs = EXCLUDED.target_langs,
-                    spent = EXCLUDED.spent,
-                    impressions = EXCLUDED.impressions,
-                    goals = EXCLUDED.goals,
-                    price_target = EXCLUDED.price_target,
-                    cpm = EXCLUDED.cpm,
-                    object = EXCLUDED.object,
-                    account_uid = EXCLUDED.account_uid,
-                    account_name = EXCLUDED.account_name,
-                    target_countries = EXCLUDED.target_countries,
-                    target_user_locations = EXCLUDED.target_user_locations,
-                    target_user_channels = EXCLUDED.target_user_channels,
-                    ad_type = EXCLUDED.ad_type,
-                    clicks = EXCLUDED.clicks,
-                    cpc = EXCLUDED.cpc,
-                    ctr = EXCLUDED.ctr,
-                    promote_url = EXCLUDED.promote_url,
-                    website_name = EXCLUDED.website_name,
-                    views_per_users = EXCLUDED.views_per_users,
-                    button_type = EXCLUDED.button_type,
-                    media_type = EXCLUDED.media_type,
-                    only_crypto = EXCLUDED.only_crypto,
-                    exclude_crypto = EXCLUDED.exclude_crypto;
-            """).format(sql.Identifier(table_name)),
-                batch,
+                    INSERT INTO {} (
+                        date, spent, impressions, goals, price_target, cpm, object, account_uid, account_name, ad_type, clicks, cpc, ctr
+                    ) VALUES (
+                        %(date)s, %(spent)s, %(impressions)s, %(goals)s, %(price_target)s, %(cpm)s, %(object)s, %(account_uid)s, %(account_name)s, %(ad_type)s, %(clicks)s, %(cpc)s, %(ctr)s
+                    )
+                    ON CONFLICT (date, object, account_uid) DO UPDATE SET
+                        spent = EXCLUDED.spent,
+                        impressions = EXCLUDED.impressions,
+                        goals = EXCLUDED.goals,
+                        price_target = EXCLUDED.price_target,
+                        cpm = EXCLUDED.cpm,
+                        account_name = EXCLUDED.account_name,
+                        ad_type = EXCLUDED.ad_type,
+                        clicks = EXCLUDED.clicks,
+                        cpc = EXCLUDED.cpc,
+                        ctr = EXCLUDED.ctr;
+                """).format(sql.Identifier(table_name)),
+                batch
             )
             colored(
                 "green",
@@ -201,20 +153,20 @@ def save_data(
 def fetch_data(username: str, password: str) -> List[Dict[str, Any]]:
     try:
         session = requests.session()
-        session.headers.update({"User-Agent": "Mozilla/5.0"})
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"})
         payload = {
             "username": username,
             "password": password,
         }
         r = session.post("https://client.adstat.pro/api/v2/login", payload)
         login_result = r.json()
-        print_err(login_result)
+        #print_err(login_result)
         access_token = login_result["access_token"]
-        session.headers.update({"Authorization": f"Bearer {access_token}"})
 
         now = datetime.datetime.now(datetime.UTC)
 
-        date_from = (now - datetime.timedelta(hours=1, minutes=15)).strftime(
+        date_from = (now - datetime.timedelta(hours=1, minutes=5)).strftime(
             DATETIME_FORMAT
         )
         date_to = now.strftime(DATETIME_FORMAT)
@@ -227,7 +179,7 @@ def fetch_data(username: str, password: str) -> List[Dict[str, Any]]:
             "group_time": 1,
             "groupings": [
                 {"name": "object"},
-                {"name": "campaign"},
+                #{"name": "campaign"},
                 {"name": "account", "type": 1},
                 {"name": "date", "type": 1},
             ],
@@ -239,7 +191,9 @@ def fetch_data(username: str, password: str) -> List[Dict[str, Any]]:
             "use_account_currency": False,
         }
         r = session.post(
-            "https://client.adstat.pro/api/report/tgview", json=payload)
+            "https://client.adstat.pro/api/report/tgview", 
+            json=payload,
+            headers={"Authorization": f"Bearer {access_token}"})
         return r.json().get("results", [])
     except requests.RequestException as e:
         colored("red", f"Error fetching data from server: {e}")
@@ -249,14 +203,12 @@ def fetch_data(username: str, password: str) -> List[Dict[str, Any]]:
 def main() -> None:
     db_config = {
         "dbname": os.getenv("DB_NAME", "adstat_db"),
-        "user": os.getenv("DB_USER"),
-        "password": os.getenv("DB_PASSWORD"),
-        "host": os.getenv("DB_HOST"),
+        "user": os.getenv("DB_USER", "docker"),
+        "password": os.getenv("DB_PASSWORD", "secret"),
+        "host": os.getenv("DB_HOST", "postgres"),
         "port": int(os.getenv("DB_PORT", 5432)),
         "sslmode": os.getenv("DB_SSLMODE", "require"),
     }
-
-    table_name = "ad_campaigns"
 
     try:
         create_database(db_config)
@@ -264,6 +216,7 @@ def main() -> None:
         connection = psycopg2.connect(**db_config)
         connection.autocommit = True
         cursor = connection.cursor()
+        table_name = "statistics"
         create_table(cursor, table_name)
 
         data = fetch_data(
