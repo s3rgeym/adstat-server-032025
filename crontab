@@ -1,0 +1,5 @@
+# Запуск скрипта при старте системы (контейнера)
+@reboot /usr/local/bin/python /app/import_adstat.py >> /var/log/cron.log 2>&1
+
+# Запуск скрипта каждый час в 00 минут
+0 * * * * /usr/local/bin/python /app/import_adstat.py >> /var/log/cron.log 2>&1
