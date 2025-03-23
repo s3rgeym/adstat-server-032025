@@ -14,6 +14,7 @@ services:
     volumes:
       - /srv/postgres/data:/var/lib/postgresql/data
       - /srv/postgres/certs:/etc/postgres/certs
+      - ./data:/data
     command: >
       postgres -c ssl=on
                -c ssl_cert_file=/etc/postgres/certs/server.crt
